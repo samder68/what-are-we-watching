@@ -3,7 +3,8 @@ import { useState } from 'react';
 
 export default function StreamingTracker() {
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [selectedShow, setSelectedShow] = useState(null);
   const [watchingList, setWatchingList] = useState([
     {
       id: 1,
@@ -14,7 +15,9 @@ export default function StreamingTracker() {
       totalEpisodes: 28,
       watchingWith: "Sarah",
       rating: 5,
-      genre: "Comedy/Drama"
+      genre: "Comedy/Drama",
+      notes: "Amazing show! Can't wait for next episode.",
+      status: "watching"
     },
     {
       id: 2,
@@ -25,9 +28,14 @@ export default function StreamingTracker() {
       totalEpisodes: 18,
       watchingWith: "Solo",
       rating: 4,
-      genre: "Fantasy/Drama"
+      genre: "Fantasy/Drama",
+      notes: "Great visuals but slow pacing.",
+      status: "watching"
     }
   ]);
+
+  const [completedList, setCompletedList] = useState([]);
+  const [currentNotes, setCurrentNotes] = useState('');
 
   // Form states
   const [newShow, setNewShow] = useState({
@@ -45,7 +53,15 @@ export default function StreamingTracker() {
     border: 'none',
     borderRadius: '8px',
     margin: '5px',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    fontSize: '14px'
+  };
+
+  const smallButtonStyle = {
+    ...buttonStyle,
+    padding: '6px 12px',
+    fontSize: '12px',
+    margin: '2px'
   };
 
   const cardStyle = {
@@ -76,8 +92,10 @@ export default function StreamingTracker() {
         episode: newShow.episode,
         totalEpisodes: 20, // default
         watchingWith: newShow.watchingWith || 'Solo',
-        rating: 0,
-        genre: 'Unknown'
+        rating: 0, // Start with 0 stars
+        genre: 'Unknown',
+        notes: '',
+        status: 'watching'
       };
       
       setWatchingList([...watchingList, show]);
@@ -89,15 +107,55 @@ export default function StreamingTracker() {
     }
   };
 
-  const handleWriteReview = () => {
-    alert('Review feature coming soon! For now, click the stars on each show to rate.');
-    setShowReviewModal(false);
-  };
-
   const updateRating = (showId, newRating) => {
     setWatchingList(watchingList.map(show => 
       show.id === showId ? { ...show, rating: newRating } : show
     ));
+  };
+
+  const markAsCompleted = (showId) => {
+    const show = watchingList.find(s => s.id === showId);
+    if (show) {
+      setCompletedList([...completedList, { ...show, status: 'completed' }]);
+      setWatchingList(watchingList.filter(s => s.id !== showId));
+      alert(`"${show.title}" moved to completed shows!`);
+    }
+  };
+
+  const removeShow = (showId) => {
+    const show = watchingList.find(s => s.id === showId);
+    if (confirm(`Remove "${show.title}" from your list?`)) {
+      setWatchingList(watchingList.filter(s => s.id !== showId));
+    }
+  };
+
+  const nextEpisode = (showId) => {
+    setWatchingList(watchingList.map(show => 
+      show.id === showId ? { 
+        ...show, 
+        episode: show.episode + 1,
+        // Move to next season if we've watched all episodes (simplified logic)
+        season: show.episode >= 10 ? show.season + 1 : show.season,
+        episode: show.episode >= 10 ? 1 : show.episode + 1
+      } : show
+    ));
+    alert('Episode progress updated!');
+  };
+
+  const openNotesModal = (show) => {
+    setSelectedShow(show);
+    setCurrentNotes(show.notes || '');
+    setShowNotesModal(true);
+  };
+
+  const saveNotes = () => {
+    setWatchingList(watchingList.map(show => 
+      show.id === selectedShow.id ? { ...show, notes: currentNotes } : show
+    ));
+    setShowNotesModal(false);
+    setSelectedShow(null);
+    setCurrentNotes('');
+    alert('Notes saved!');
   };
 
   const renderStars = (rating, showId = null) => {
@@ -107,9 +165,11 @@ export default function StreamingTracker() {
         style={{
           cursor: showId ? 'pointer' : 'default',
           color: i < rating ? '#fbbf24' : '#d1d5db',
-          fontSize: '18px'
+          fontSize: '18px',
+          marginRight: '2px'
         }}
         onClick={() => showId && updateRating(showId, i + 1)}
+        title={showId ? `Rate ${i + 1} star${i + 1 > 1 ? 's' : ''}` : ''}
       >
         ⭐
       </span>
@@ -136,12 +196,6 @@ export default function StreamingTracker() {
         >
           👥 See What Friends Are Watching
         </button>
-        <button 
-          style={{...buttonStyle, backgroundColor: '#7c3aed'}}
-          onClick={() => setShowReviewModal(true)}
-        >
-          ⭐ Write a Review
-        </button>
       </div>
 
       <h2 style={{fontSize: '24px', fontWeight: 'bold', marginBottom: '20px'}}>
@@ -156,14 +210,74 @@ export default function StreamingTracker() {
           <p style={{color: '#6b7280', margin: '5px 0'}}>{show.service} • {show.genre}</p>
           <p style={{margin: '5px 0'}}>Progress: S{show.season}E{show.episode} of {show.totalEpisodes} episodes</p>
           <p style={{margin: '5px 0'}}>With {show.watchingWith}</p>
+          
           <div style={{margin: '10px 0'}}>
-            Rating: {renderStars(show.rating, show.id)}
+            <strong>Rating:</strong> {renderStars(show.rating, show.id)} 
+            <span style={{fontSize: '12px', color: '#6b7280', marginLeft: '10px'}}>
+              (Click stars to rate)
+            </span>
           </div>
-          <button style={{...buttonStyle, fontSize: '14px', padding: '8px 16px'}}>
-            ▶️ Watch Next
-          </button>
+
+          {show.notes && (
+            <div style={{margin: '10px 0', padding: '10px', backgroundColor: '#f3f4f6', borderRadius: '6px'}}>
+              <strong>Notes:</strong> {show.notes}
+            </div>
+          )}
+
+          <div style={{marginTop: '15px', display: 'flex', flexWrap: 'wrap', gap: '5px'}}>
+            <button 
+              style={{...smallButtonStyle, backgroundColor: '#3b82f6'}}
+              onClick={() => nextEpisode(show.id)}
+              title="Mark next episode as watched"
+            >
+              ▶️ Watch Next
+            </button>
+            <button 
+              style={{...smallButtonStyle, backgroundColor: '#059669'}}
+              onClick={() => markAsCompleted(show.id)}
+              title="Mark entire show as completed"
+            >
+              ✅ Mark Complete
+            </button>
+            <button 
+              style={{...smallButtonStyle, backgroundColor: '#7c3aed'}}
+              onClick={() => openNotesModal(show)}
+              title="Add/edit notes about this show"
+            >
+              📝 Notes
+            </button>
+            <button 
+              style={{...smallButtonStyle, backgroundColor: '#dc2626'}}
+              onClick={() => removeShow(show.id)}
+              title="Remove show from list"
+            >
+              🗑️ Remove
+            </button>
+          </div>
         </div>
       ))}
+
+      {completedList.length > 0 && (
+        <>
+          <h2 style={{fontSize: '24px', fontWeight: 'bold', marginBottom: '20px', marginTop: '40px'}}>
+            Completed Shows ({completedList.length})
+          </h2>
+          {completedList.map(show => (
+            <div key={`completed-${show.id}`} style={{...cardStyle, opacity: 0.8}}>
+              <h3 style={{fontSize: '18px', fontWeight: 'bold', margin: '0 0 5px 0'}}>
+                ✅ {show.title}
+              </h3>
+              <p style={{color: '#6b7280', margin: '5px 0'}}>{show.service} • Completed</p>
+              <div style={{margin: '5px 0'}}>
+                Final Rating: {renderStars(show.rating)}
+              </div>
+              {show.notes && (
+                <p style={{margin: '5px 0', fontStyle: 'italic'}}>"{show.notes}"</p>
+              )}
+            </div>
+          ))}
+        </>
+      )}
 
       {/* Add Show Modal */}
       {showAddModal && (
@@ -260,8 +374,8 @@ export default function StreamingTracker() {
         </div>
       )}
 
-      {/* Review Modal */}
-      {showReviewModal && (
+      {/* Notes Modal */}
+      {showNotesModal && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -281,17 +395,31 @@ export default function StreamingTracker() {
             maxWidth: '400px',
             width: '90%'
           }}>
-            <h2 style={{margin: '0 0 20px 0'}}>Write a Review</h2>
-            <p style={{marginBottom: '20px'}}>
-              For now, you can rate shows by clicking the stars on each show card! 
-              Full review functionality coming soon.
-            </p>
-            <button 
-              style={buttonStyle}
-              onClick={handleWriteReview}
-            >
-              Got it!
-            </button>
+            <h2 style={{margin: '0 0 20px 0'}}>Notes for "{selectedShow?.title}"</h2>
+            <textarea
+              placeholder="Add your thoughts, reviews, or reminders about this show..."
+              value={currentNotes}
+              onChange={(e) => setCurrentNotes(e.target.value)}
+              style={{
+                ...inputStyle,
+                height: '100px',
+                resize: 'vertical'
+              }}
+            />
+            <div style={{display: 'flex', gap: '10px'}}>
+              <button 
+                style={{...buttonStyle, backgroundColor: '#6b7280', flex: 1}}
+                onClick={() => setShowNotesModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                style={{...buttonStyle, flex: 1}}
+                onClick={saveNotes}
+              >
+                Save Notes
+              </button>
+            </div>
           </div>
         </div>
       )}
