@@ -9,11 +9,18 @@ export default function StreamingTracker() {
   const [completedList, setCompletedList] = useState([]);
   const [currentNotes, setCurrentNotes] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
+  const [showCustomService, setShowCustomService] = useState(false);
+
+  // Default streaming services
+  const [streamingServices, setStreamingServices] = useState([
+    "Netflix", "Hulu", "HBO Max", "Disney+", "Apple TV+", "Prime Video", "Paramount+", "Peacock", "YouTube TV"
+  ]);
 
   // Form states
   const [newShow, setNewShow] = useState({
     title: '',
     service: '',
+    customService: '',
     watchingWith: '',
     season: 1,
     episode: 1
@@ -24,6 +31,11 @@ export default function StreamingTracker() {
     try {
       const savedWatching = localStorage.getItem('watchingList');
       const savedCompleted = localStorage.getItem('completedList');
+      const savedServices = localStorage.getItem('streamingServices');
+      
+      if (savedServices) {
+        setStreamingServices(JSON.parse(savedServices));
+      }
       
       if (savedWatching) {
         setWatchingList(JSON.parse(savedWatching));
@@ -91,6 +103,16 @@ export default function StreamingTracker() {
     }
   }, [completedList, isLoaded]);
 
+  useEffect(() => {
+    if (isLoaded) {
+      try {
+        localStorage.setItem('streamingServices', JSON.stringify(streamingServices));
+      } catch (error) {
+        console.error('Error saving streaming services:', error);
+      }
+    }
+  }, [streamingServices, isLoaded]);
+
   const buttonStyle = {
     backgroundColor: '#3b82f6',
     color: 'white',
@@ -127,12 +149,30 @@ export default function StreamingTracker() {
     boxSizing: 'border-box'
   };
 
+  const handleServiceChange = (value) => {
+    setNewShow({...newShow, service: value});
+    setShowCustomService(value === 'Other');
+  };
+
   const handleAddShow = () => {
-    if (newShow.title && newShow.service) {
+    let finalService = newShow.service;
+    
+    // If "Other" was selected and custom service was entered
+    if (newShow.service === 'Other' && newShow.customService.trim()) {
+      finalService = newShow.customService.trim();
+      
+      // Add the new service to the list if it doesn't exist
+      if (!streamingServices.includes(finalService)) {
+        const updatedServices = [...streamingServices, finalService].sort();
+        setStreamingServices(updatedServices);
+      }
+    }
+
+    if (newShow.title && finalService && finalService !== 'Other') {
       const show = {
         id: Date.now(),
         title: newShow.title,
-        service: newShow.service,
+        service: finalService,
         season: newShow.season,
         episode: newShow.episode,
         totalEpisodes: 20, // default
@@ -144,11 +184,16 @@ export default function StreamingTracker() {
       };
       
       setWatchingList([...watchingList, show]);
-      setNewShow({ title: '', service: '', watchingWith: '', season: 1, episode: 1 });
+      setNewShow({ title: '', service: '', customService: '', watchingWith: '', season: 1, episode: 1 });
+      setShowCustomService(false);
       setShowAddModal(false);
       alert('Show added successfully!');
     } else {
-      alert('Please fill in show name and service!');
+      if (newShow.service === 'Other' && !newShow.customService.trim()) {
+        alert('Please enter the streaming service name!');
+      } else {
+        alert('Please fill in show name and service!');
+      }
     }
   };
 
@@ -214,28 +259,58 @@ export default function StreamingTracker() {
     if (confirm('Are you sure you want to clear ALL your data? This cannot be undone.')) {
       localStorage.removeItem('watchingList');
       localStorage.removeItem('completedList');
+      localStorage.removeItem('streamingServices');
       setWatchingList([]);
       setCompletedList([]);
+      setStreamingServices(["Netflix", "Hulu", "HBO Max", "Disney+", "Apple TV+", "Prime Video", "Paramount+", "Peacock", "YouTube TV"]);
       alert('All data cleared!');
     }
   };
 
-  const renderStars = (rating, showId = null) => {
-    return Array.from({length: 5}, (_, i) => (
-      <span 
-        key={i}
-        style={{
-          cursor: showId ? 'pointer' : 'default',
-          color: i < rating ? '#fbbf24' : '#d1d5db',
-          fontSize: '18px',
-          marginRight: '2px'
-        }}
-        onClick={() => showId && updateRating(showId, i + 1)}
-        title={showId ? `Rate ${i + 1} star${i + 1 > 1 ? 's' : ''}` : ''}
-      >
-        ⭐
-      </span>
-    ));
+  const renderStars = (rating, showId = null, isClickable = false) => {
+    if (!isClickable) {
+      // Display-only stars
+      return Array.from({length: 5}, (_, i) => (
+        <span 
+          key={i}
+          style={{
+            color: i < rating ? '#fbbf24' : '#d1d5db',
+            fontSize: '18px',
+            marginRight: '2px'
+          }}
+        >
+          ⭐
+        </span>
+      ));
+    }
+
+    // Interactive rating buttons
+    return (
+      <div style={{display: 'flex', gap: '5px', alignItems: 'center', flexWrap: 'wrap'}}>
+        {Array.from({length: 5}, (_, i) => (
+          <button
+            key={i}
+            onClick={() => updateRating(showId, i + 1)}
+            style={{
+              backgroundColor: i < rating ? '#fbbf24' : '#e5e7eb',
+              color: i < rating ? 'white' : '#6b7280',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '6px 10px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              minWidth: '40px'
+            }}
+          >
+            {i + 1}⭐
+          </button>
+        ))}
+        <span style={{marginLeft: '10px', fontSize: '12px', color: '#6b7280'}}>
+          ({rating}/5)
+        </span>
+      </div>
+    );
   };
 
   // Show loading state while data loads
@@ -299,10 +374,10 @@ export default function StreamingTracker() {
             <p style={{margin: '5px 0'}}>With {show.watchingWith}</p>
             
             <div style={{margin: '10px 0'}}>
-              <strong>Rating:</strong> {renderStars(show.rating, show.id)} 
-              <span style={{fontSize: '12px', color: '#6b7280', marginLeft: '10px'}}>
-                (Click stars to rate)
-              </span>
+              <strong>Rating:</strong>
+              <div style={{marginTop: '5px'}}>
+                {renderStars(show.rating, show.id, true)}
+              </div>
             </div>
 
             {show.notes && (
@@ -359,7 +434,7 @@ export default function StreamingTracker() {
                   </h3>
                   <p style={{color: '#6b7280', margin: '5px 0'}}>{show.service} • Completed</p>
                   <div style={{margin: '5px 0'}}>
-                    Final Rating: {renderStars(show.rating)}
+                    Final Rating: {renderStars(show.rating, null, false)}
                   </div>
                   {show.notes && (
                     <p style={{margin: '5px 0', fontStyle: 'italic'}}>"{show.notes}"</p>
@@ -411,18 +486,25 @@ export default function StreamingTracker() {
             
             <select 
               value={newShow.service}
-              onChange={(e) => setNewShow({...newShow, service: e.target.value})}
+              onChange={(e) => handleServiceChange(e.target.value)}
               style={inputStyle}
             >
               <option value="">Select service...</option>
-              <option value="Netflix">Netflix</option>
-              <option value="Hulu">Hulu</option>
-              <option value="HBO Max">HBO Max</option>
-              <option value="Disney+">Disney+</option>
-              <option value="Apple TV+">Apple TV+</option>
-              <option value="Prime Video">Prime Video</option>
-              <option value="Other">Other</option>
+              {streamingServices.map(service => (
+                <option key={service} value={service}>{service}</option>
+              ))}
+              <option value="Other">Other (add new service)</option>
             </select>
+
+            {showCustomService && (
+              <input 
+                type="text" 
+                placeholder="Enter streaming service name"
+                value={newShow.customService}
+                onChange={(e) => setNewShow({...newShow, customService: e.target.value})}
+                style={inputStyle}
+              />
+            )}
 
             <input 
               type="text" 
@@ -458,7 +540,11 @@ export default function StreamingTracker() {
             <div style={{display: 'flex', gap: '10px'}}>
               <button 
                 style={{...buttonStyle, backgroundColor: '#6b7280', flex: 1}}
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  setShowAddModal(false);
+                  setShowCustomService(false);
+                  setNewShow({ title: '', service: '', customService: '', watchingWith: '', season: 1, episode: 1 });
+                }}
               >
                 Cancel
               </button>
