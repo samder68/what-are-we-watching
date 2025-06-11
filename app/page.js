@@ -1,41 +1,14 @@
 'use client'
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function StreamingTracker() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [selectedShow, setSelectedShow] = useState(null);
-  const [watchingList, setWatchingList] = useState([
-    {
-      id: 1,
-      title: "The Bear",
-      service: "Hulu",
-      season: 3,
-      episode: 5,
-      totalEpisodes: 28,
-      watchingWith: "Sarah",
-      rating: 5,
-      genre: "Comedy/Drama",
-      notes: "Amazing show! Can't wait for next episode.",
-      status: "watching"
-    },
-    {
-      id: 2,
-      title: "House of the Dragon",
-      service: "HBO Max",
-      season: 2,
-      episode: 3,
-      totalEpisodes: 18,
-      watchingWith: "Solo",
-      rating: 4,
-      genre: "Fantasy/Drama",
-      notes: "Great visuals but slow pacing.",
-      status: "watching"
-    }
-  ]);
-
+  const [watchingList, setWatchingList] = useState([]);
   const [completedList, setCompletedList] = useState([]);
   const [currentNotes, setCurrentNotes] = useState('');
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // Form states
   const [newShow, setNewShow] = useState({
@@ -45,6 +18,78 @@ export default function StreamingTracker() {
     season: 1,
     episode: 1
   });
+
+  // Load data from browser storage when app starts
+  useEffect(() => {
+    try {
+      const savedWatching = localStorage.getItem('watchingList');
+      const savedCompleted = localStorage.getItem('completedList');
+      
+      if (savedWatching) {
+        setWatchingList(JSON.parse(savedWatching));
+      } else {
+        // Default shows for first time users
+        setWatchingList([
+          {
+            id: 1,
+            title: "The Bear",
+            service: "Hulu",
+            season: 3,
+            episode: 5,
+            totalEpisodes: 28,
+            watchingWith: "Sarah",
+            rating: 5,
+            genre: "Comedy/Drama",
+            notes: "Amazing show! Can't wait for next episode.",
+            status: "watching"
+          },
+          {
+            id: 2,
+            title: "House of the Dragon",
+            service: "HBO Max",
+            season: 2,
+            episode: 3,
+            totalEpisodes: 18,
+            watchingWith: "Solo",
+            rating: 4,
+            genre: "Fantasy/Drama",
+            notes: "Great visuals but slow pacing.",
+            status: "watching"
+          }
+        ]);
+      }
+
+      if (savedCompleted) {
+        setCompletedList(JSON.parse(savedCompleted));
+      }
+      
+      setIsLoaded(true);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      setIsLoaded(true);
+    }
+  }, []);
+
+  // Save data to browser storage whenever lists change
+  useEffect(() => {
+    if (isLoaded) {
+      try {
+        localStorage.setItem('watchingList', JSON.stringify(watchingList));
+      } catch (error) {
+        console.error('Error saving watching list:', error);
+      }
+    }
+  }, [watchingList, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      try {
+        localStorage.setItem('completedList', JSON.stringify(completedList));
+      } catch (error) {
+        console.error('Error saving completed list:', error);
+      }
+    }
+  }, [completedList, isLoaded]);
 
   const buttonStyle = {
     backgroundColor: '#3b82f6',
@@ -129,6 +174,13 @@ export default function StreamingTracker() {
     }
   };
 
+  const removeCompleted = (showId) => {
+    const show = completedList.find(s => s.id === showId);
+    if (confirm(`Remove "${show.title}" from completed list?`)) {
+      setCompletedList(completedList.filter(s => s.id !== showId));
+    }
+  };
+
   const nextEpisode = (showId) => {
     setWatchingList(watchingList.map(show => 
       show.id === showId ? { 
@@ -158,6 +210,16 @@ export default function StreamingTracker() {
     alert('Notes saved!');
   };
 
+  const clearAllData = () => {
+    if (confirm('Are you sure you want to clear ALL your data? This cannot be undone.')) {
+      localStorage.removeItem('watchingList');
+      localStorage.removeItem('completedList');
+      setWatchingList([]);
+      setCompletedList([]);
+      alert('All data cleared!');
+    }
+  };
+
   const renderStars = (rating, showId = null) => {
     return Array.from({length: 5}, (_, i) => (
       <span 
@@ -176,11 +238,23 @@ export default function StreamingTracker() {
     ));
   };
 
+  // Show loading state while data loads
+  if (!isLoaded) {
+    return (
+      <div style={{padding: '20px', fontFamily: 'Arial, sans-serif', textAlign: 'center'}}>
+        <h1>Loading your shows...</h1>
+      </div>
+    );
+  }
+
   return (
     <div style={{padding: '20px', fontFamily: 'Arial, sans-serif', backgroundColor: '#f9fafb', minHeight: '100vh'}}>
       <header style={{marginBottom: '30px'}}>
         <h1 style={{fontSize: '32px', fontWeight: 'bold', margin: '0'}}>What Are We Watching</h1>
         <p style={{color: '#6b7280', marginTop: '5px'}}>Track, share, and discover your streaming journey</p>
+        <p style={{color: '#059669', fontSize: '12px', marginTop: '5px'}}>
+          💾 Your data is automatically saved in your browser!
+        </p>
       </header>
 
       <div style={{marginBottom: '30px'}}>
@@ -196,66 +270,80 @@ export default function StreamingTracker() {
         >
           👥 See What Friends Are Watching
         </button>
+        <button 
+          style={{...buttonStyle, backgroundColor: '#dc2626'}}
+          onClick={clearAllData}
+        >
+          🗑️ Clear All Data
+        </button>
       </div>
 
       <h2 style={{fontSize: '24px', fontWeight: 'bold', marginBottom: '20px'}}>
         Currently Watching ({watchingList.length} shows)
       </h2>
       
-      {watchingList.map(show => (
-        <div key={show.id} style={cardStyle}>
-          <h3 style={{fontSize: '20px', fontWeight: 'bold', margin: '0 0 10px 0'}}>
-            {show.title === 'The Bear' ? '🐻' : show.title === 'House of the Dragon' ? '🐉' : '📺'} {show.title}
-          </h3>
-          <p style={{color: '#6b7280', margin: '5px 0'}}>{show.service} • {show.genre}</p>
-          <p style={{margin: '5px 0'}}>Progress: S{show.season}E{show.episode} of {show.totalEpisodes} episodes</p>
-          <p style={{margin: '5px 0'}}>With {show.watchingWith}</p>
-          
-          <div style={{margin: '10px 0'}}>
-            <strong>Rating:</strong> {renderStars(show.rating, show.id)} 
-            <span style={{fontSize: '12px', color: '#6b7280', marginLeft: '10px'}}>
-              (Click stars to rate)
-            </span>
-          </div>
-
-          {show.notes && (
-            <div style={{margin: '10px 0', padding: '10px', backgroundColor: '#f3f4f6', borderRadius: '6px'}}>
-              <strong>Notes:</strong> {show.notes}
-            </div>
-          )}
-
-          <div style={{marginTop: '15px', display: 'flex', flexWrap: 'wrap', gap: '5px'}}>
-            <button 
-              style={{...smallButtonStyle, backgroundColor: '#3b82f6'}}
-              onClick={() => nextEpisode(show.id)}
-              title="Mark next episode as watched"
-            >
-              ▶️ Watch Next
-            </button>
-            <button 
-              style={{...smallButtonStyle, backgroundColor: '#059669'}}
-              onClick={() => markAsCompleted(show.id)}
-              title="Mark entire show as completed"
-            >
-              ✅ Mark Complete
-            </button>
-            <button 
-              style={{...smallButtonStyle, backgroundColor: '#7c3aed'}}
-              onClick={() => openNotesModal(show)}
-              title="Add/edit notes about this show"
-            >
-              📝 Notes
-            </button>
-            <button 
-              style={{...smallButtonStyle, backgroundColor: '#dc2626'}}
-              onClick={() => removeShow(show.id)}
-              title="Remove show from list"
-            >
-              🗑️ Remove
-            </button>
-          </div>
+      {watchingList.length === 0 ? (
+        <div style={cardStyle}>
+          <p style={{textAlign: 'center', color: '#6b7280'}}>
+            No shows yet! Click "Add Show or Movie" to get started.
+          </p>
         </div>
-      ))}
+      ) : (
+        watchingList.map(show => (
+          <div key={show.id} style={cardStyle}>
+            <h3 style={{fontSize: '20px', fontWeight: 'bold', margin: '0 0 10px 0'}}>
+              {show.title === 'The Bear' ? '🐻' : show.title === 'House of the Dragon' ? '🐉' : '📺'} {show.title}
+            </h3>
+            <p style={{color: '#6b7280', margin: '5px 0'}}>{show.service} • {show.genre}</p>
+            <p style={{margin: '5px 0'}}>Progress: S{show.season}E{show.episode} of {show.totalEpisodes} episodes</p>
+            <p style={{margin: '5px 0'}}>With {show.watchingWith}</p>
+            
+            <div style={{margin: '10px 0'}}>
+              <strong>Rating:</strong> {renderStars(show.rating, show.id)} 
+              <span style={{fontSize: '12px', color: '#6b7280', marginLeft: '10px'}}>
+                (Click stars to rate)
+              </span>
+            </div>
+
+            {show.notes && (
+              <div style={{margin: '10px 0', padding: '10px', backgroundColor: '#f3f4f6', borderRadius: '6px'}}>
+                <strong>Notes:</strong> {show.notes}
+              </div>
+            )}
+
+            <div style={{marginTop: '15px', display: 'flex', flexWrap: 'wrap', gap: '5px'}}>
+              <button 
+                style={{...smallButtonStyle, backgroundColor: '#3b82f6'}}
+                onClick={() => nextEpisode(show.id)}
+                title="Mark next episode as watched"
+              >
+                ▶️ Watch Next
+              </button>
+              <button 
+                style={{...smallButtonStyle, backgroundColor: '#059669'}}
+                onClick={() => markAsCompleted(show.id)}
+                title="Mark entire show as completed"
+              >
+                ✅ Mark Complete
+              </button>
+              <button 
+                style={{...smallButtonStyle, backgroundColor: '#7c3aed'}}
+                onClick={() => openNotesModal(show)}
+                title="Add/edit notes about this show"
+              >
+                📝 Notes
+              </button>
+              <button 
+                style={{...smallButtonStyle, backgroundColor: '#dc2626'}}
+                onClick={() => removeShow(show.id)}
+                title="Remove show from list"
+              >
+                🗑️ Remove
+              </button>
+            </div>
+          </div>
+        ))
+      )}
 
       {completedList.length > 0 && (
         <>
@@ -264,16 +352,27 @@ export default function StreamingTracker() {
           </h2>
           {completedList.map(show => (
             <div key={`completed-${show.id}`} style={{...cardStyle, opacity: 0.8}}>
-              <h3 style={{fontSize: '18px', fontWeight: 'bold', margin: '0 0 5px 0'}}>
-                ✅ {show.title}
-              </h3>
-              <p style={{color: '#6b7280', margin: '5px 0'}}>{show.service} • Completed</p>
-              <div style={{margin: '5px 0'}}>
-                Final Rating: {renderStars(show.rating)}
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+                <div style={{flex: 1}}>
+                  <h3 style={{fontSize: '18px', fontWeight: 'bold', margin: '0 0 5px 0'}}>
+                    ✅ {show.title}
+                  </h3>
+                  <p style={{color: '#6b7280', margin: '5px 0'}}>{show.service} • Completed</p>
+                  <div style={{margin: '5px 0'}}>
+                    Final Rating: {renderStars(show.rating)}
+                  </div>
+                  {show.notes && (
+                    <p style={{margin: '5px 0', fontStyle: 'italic'}}>"{show.notes}"</p>
+                  )}
+                </div>
+                <button 
+                  style={{...smallButtonStyle, backgroundColor: '#dc2626', marginLeft: '10px'}}
+                  onClick={() => removeCompleted(show.id)}
+                  title="Remove from completed list"
+                >
+                  🗑️
+                </button>
               </div>
-              {show.notes && (
-                <p style={{margin: '5px 0', fontStyle: 'italic'}}>"{show.notes}"</p>
-              )}
             </div>
           ))}
         </>
